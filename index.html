@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GDE-Modell: Phantom-Phase w(z)</title>
+    <!-- MathJax for LaTeX rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js and Annotation Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <script>
+        // Tailwind Config
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE', // Lila-Blau (GDE Model)
+                        heading: '#0A2472', // Dunkelblau
+                        accent1: '#5D9CDE', // Hellblau
+                        accent2: '#DE5D9C', // Pink
+                        phantom: '#ef4444', // Rot
+                        quintessence: '#3b82f6', // Blau
+                        cosmological: '#10b981', // Grün (LCDM)
+                        desi: '#f97316', // Orange
+                        bgLight: '#ffffff',
+                        bgDark: '#111827', // Tailwind gray-900
+                        textLight: '#1f2937',
+                        textDark: '#f3f4f6'
+                    }
+                }
+            }
+        }
+        // Dark Mode Logic
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            document.documentElement.classList.toggle('dark', event.matches);
+            renderChart(); // Re-render chart on theme change
+        });
+    </script>
+    <style>
+        .dark { color-scheme: dark; }
+        .chart-container { position: relative; height: 60vh; width: 100%; margin-bottom: 1rem; } /* Taller chart */
+        .small-chart-container { position: relative; height: 35vh; width: 100%; margin-bottom: 1rem; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; height: 6px; background: #e2e8f0; border-radius: 5px; outline: none; margin: 5px 0; }
+        .dark input[type="range"] { background: #4b5563; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #5D5CDE; cursor: pointer; }
+        .dark input[type="range"]::-webkit-slider-thumb { background: #93c5fd; }
+        input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #5D5CDE; cursor: pointer; border: none; }
+        .dark input[type="range"]::-moz-range-thumb { background: #93c5fd; }
+        .phantom-highlight { background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; }
+        .dark .phantom-highlight { background-color: rgba(239, 68, 68, 0.2); }
+        .slider-label { font-size: 0.8rem; color: #4b5563; }
+        .dark .slider-label { color: #9ca3af; }
+        .mathjax-no-gap {
+            margin-top: -15px;
+            margin-bottom: -15px;
+        }
+        /* Fix MathJax in dark mode */
+        .dark .MathJax { color: #f3f4f6 !important; }
+    </style>
+</head>
+<body class="bg-bgLight dark:bg-bgDark text-textLight dark:text-textDark transition-colors duration-200 font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <div class="text-center md:text-left">
+                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-heading to-accent1 dark:from-accent1 dark:to-accent2">
+                    Phantom-Phase im GDE-Modell: w(z)
+                </h1>
+                <p class="text-lg text-heading dark:text-accent1 mt-2">Visualisierung der Phantom-Dynamik (angepasst an DESI-Fits)</p>
+            </div>
+            <div class="flex items-center">
+                <button id="darkModeToggle" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center">
+                    <span id="darkModeIcon" class="mr-2">🌙</span>
+                    <span id="darkModeText">Dark Mode</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <section class="bg-white/80 dark:bg-gray-800/80 p-6 rounded-xl shadow-lg lg:col-span-2">
+                <h3 class="text-xl font-semibold mb-4 text-primary dark:text-accent1">Interaktive GDE-Parameter</h3>
+                <p class="text-sm mb-4 text-gray-600 dark:text-gray-400">Passe die Parameter an, um zu sehen, wie sie die w(z)-Kurve im kritischen Bereich beeinflussen. Die Startwerte entsprechen dem Fit, der w(0.5) ≈ -1.05 ergibt.</p>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                        <label for="alpha_0" class="block font-semibold text-indigo-700 dark:text-indigo-300 text-sm slider-label">Basis-Exponent α<sub>0</sub></label>
+                        <input type="range" id="alpha_0" min="-1.0" max="-0.5" step="0.01" value="-0.65" class="w-full">
+                        <p id="alpha_0_value" class="text-sm text-center font-medium">α<sub>0</sub> = -0.65</p>
+                    </div>
+                    <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                        <label for="alpha_amp" class="block font-semibold text-indigo-700 dark:text-indigo-300 text-sm slider-label">Amplitude A</label>
+                        <input type="range" id="alpha_amp" min="0.8" max="1.4" step="0.01" value="1.10" class="w-full">
+                        <p id="alpha_amp_value" class="text-sm text-center font-medium">A = 1.10</p>
+                    </div>
+                    <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                        <label for="z_star" class="block font-semibold text-indigo-700 dark:text-indigo-300 text-sm slider-label">Übergang z<sub>*</sub></label>
+                        <input type="range" id="z_star" min="0.5" max="0.7" step="0.01" value="0.60" class="w-full">
+                        <p id="z_star_value" class="text-sm text-center font-medium">z<sub>*</sub> = 0.60</p>
+                    </div>
+                    <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                        <label for="beta" class="block font-semibold text-indigo-700 dark:text-indigo-300 text-sm slider-label">Entropie β</label>
+                        <input type="range" id="beta" min="0.02" max="0.06" step="0.001" value="0.040" class="w-full">
+                        <p id="beta_value" class="text-sm text-center font-medium">β = 0.040</p>
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-wrap justify-center gap-3">
+                    <button id="resetParams" class="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 text-sm flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        Standardwerte
+                    </button>
+                    <button id="pantheonFit" class="px-3 py-1 bg-phantom/80 text-white rounded-full hover:bg-phantom text-sm">
+                        DESI+PantheonPlus
+                    </button>
+                    <button id="unionFit" class="px-3 py-1 bg-desi/80 text-white rounded-full hover:bg-desi text-sm">
+                        DESI+Union3
+                    </button>
+                    <button id="desy5Fit" class="px-3 py-1 bg-yellow-500/80 text-white rounded-full hover:bg-yellow-500 text-sm">
+                        DESI+DESY5
+                    </button>
+                </div>
+            </section>
+
+            <section class="phantom-highlight p-6 rounded-xl shadow-lg">
+                <h4 class="text-lg font-semibold text-phantom">DESI-Messungen</h4>
+                <p class="text-sm mt-1 mb-3">Die neuesten DESI-Fits zeigen bei z=0.5 einen Wert von w(0.5) ≈ -1.05, deutlich im Phantom-Bereich (w < -1).</p>
+                
+                <div class="bg-white/90 dark:bg-gray-900/90 p-3 rounded-lg">
+                    <h5 class="font-semibold mb-2 text-sm">DESI+SDSS+CMB+PantheonPlus:</h5>
+                    <div class="text-sm flex flex-wrap justify-between">
+                        <span>w<sub>0</sub> = -0.855 ± 0.060</span>
+                        <span>w<sub>a</sub> = -0.60<sup>+0.26</sup><sub>-0.23</sub></span>
+                    </div>
+                    <p class="text-sm font-semibold mt-1">→ w(0.5) ≈ -1.06</p>
+                </div>
+                
+                <div class="bg-white/90 dark:bg-gray-900/90 p-3 rounded-lg mt-3">
+                    <h5 class="font-semibold mb-2 text-sm">DESI+SDSS+CMB+Union3:</h5>
+                    <div class="text-sm flex flex-wrap justify-between">
+                        <span>w<sub>0</sub> = -0.692 ± 0.095</span>
+                        <span>w<sub>a</sub> = -1.06<sup>+0.36</sup><sub>-0.31</sub></span>
+                    </div>
+                    <p class="text-sm font-semibold mt-1">→ w(0.5) ≈ -1.05</p>
+                </div>
+                
+                <div class="bg-white/90 dark:bg-gray-900/90 p-3 rounded-lg mt-3">
+                    <h5 class="font-semibold mb-2 text-sm">DESI+SDSS+CMB+DESY5:</h5>
+                    <div class="text-sm flex flex-wrap justify-between">
+                        <span>w<sub>0</sub> = -0.761 ± 0.064</span>
+                        <span>w<sub>a</sub> = -0.88<sup>+0.29</sup><sub>-0.25</sub></span>
+                    </div>
+                    <p class="text-sm font-semibold mt-1">→ w(0.5) ≈ -1.05</p>
+                </div>
+                
+                <p class="text-sm italic mt-4" id="w05_target">Zielwert: w(0.5) ≈ -1.05</p>
+            </section>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <section class="bg-white/80 dark:bg-gray-800/80 p-6 rounded-xl shadow-lg lg:col-span-2">
+                <h3 class="text-xl font-semibold mb-4 text-primary dark:text-accent1 text-center">w(z) Dynamik im Fokusbereich z=0.3 bis 1.0</h3>
+                <div class="chart-container">
+                    <canvas id="WzChart"></canvas>
+                </div>
+                <div id="w05_current_value" class="text-center font-semibold mt-4 text-lg"></div>
+            </section>
+            
+            <section class="bg-white/80 dark:bg-gray-800/80 p-6 rounded-xl shadow-lg">
+                <h3 class="text-xl font-semibold mb-4 text-primary dark:text-accent1 text-center">Thermodynamische Komponenten</h3>
+                
+                <div class="mb-4 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                    <h5 class="font-semibold text-purple-800 dark:text-purple-200 mb-1 text-sm">Temperaturabhängiger Term:</h5>
+                    <div class="text-center text-sm mathjax-no-gap">
+                        \[ \left(\frac{T_0}{T_{\mathrm{CMB}}(z)}\right)^{\alpha(z)} \]
+                    </div>
+                    <p class="text-sm mt-2">Die Temperaturkopplung ist entscheidend für die Phantom-Phase bei z=0.5.</p>
+                </div>
+                
+                <div class="mb-4 p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg">
+                    <h5 class="font-semibold text-pink-800 dark:text-pink-200 mb-1 text-sm">Entropieabhängiger Term:</h5>
+                    <div class="text-center text-sm mathjax-no-gap">
+                        \[ 1 + \beta \cdot \frac{S_{\mathrm{Struktur}}(z)}{S_{\mathrm{Struktur}}(0)} \]
+                    </div>
+                    <p class="text-sm mt-2">Die Strukturentropie moduliert die w(z)-Kurve, besonders bei niedrigen z-Werten.</p>
+                </div>
+                
+                <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                    <h5 class="font-semibold text-indigo-800 dark:text-indigo-200 mb-1 text-sm">Dynamischer Exponent α(z):</h5>
+                    <div class="text-center text-sm mathjax-no-gap">
+                        \[ \alpha(z) = \alpha_0 + A \cdot \tanh(2(z - z_*)) \]
+                    </div>
+                    <p class="text-sm mt-2">Der Übergang bei z* erzeugt die komplexe w(z)-Dynamik, die den DESI-Daten entspricht.</p>
+                </div>
+            </section>
+        </div>
+        
+        <section class="bg-white/80 dark:bg-gray-800/80 p-6 rounded-xl shadow-lg mb-6">
+            <h3 class="text-xl font-semibold mb-4 text-primary dark:text-accent1 text-center">Erweiterter Blick: w(z) im kosmologischen Kontext</h3>
+            <div class="small-chart-container">
+                <canvas id="ExtendedWzChart"></canvas>
+            </div>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="bg-phantom/10 p-3 rounded-lg dark:bg-phantom/20">
+                    <h5 class="font-semibold text-phantom mb-1">Phantom-Bereich (w < -1)</h5>
+                    <p>Tritt bei z ≈ 0.5 auf (DESI-Messpunkt). Hier steigt Λ(z), was zu stärkerer kosmischer Beschleunigung führt.</p>
+                </div>
+                <div class="bg-cosmological/10 p-3 rounded-lg dark:bg-cosmological/20">
+                    <h5 class="font-semibold text-cosmological mb-1">ΛCDM-Grenze (w = -1)</h5>
+                    <p>Der Übergang zwischen Phantom und Quintessenz. Im GDE-Modell ist dies ein dynamischer Übergangspunkt.</p>
+                </div>
+                <div class="bg-quintessence/10 p-3 rounded-lg dark:bg-quintessence/20">
+                    <h5 class="font-semibold text-quintessence mb-1">Quintessenz-Bereich (w > -1)</h5>
+                    <p>Dominiert bei höheren z-Werten. In diesem Bereich nimmt Λ(z) mit zunehmendem z ab.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer class="mt-8 text-center text-xs text-gray-500 dark:text-gray-400">
+            <p>GDE-Modell von Gabriel ϕ, Interaktive Visualisierung erstellt mit Poe – Let's rock die Kosmologie! 🚀</p>
+        </footer>
+    </div>
+
+    <script>
+        // Default data structure
+        const default_data = {
+            // z range focused on the interesting part + padding for main chart
+            z_focused: Array.from({length: 101}, (_, i) => 0.2 + i * 0.01), // z from 0.2 to 1.2
+            // z range for extended chart
+            z_extended: Array.from({length: 201}, (_, i) => -0.5 + i * 0.02), // z from -0.5 to 3.5
+            w_z_LCDM: Array(101).fill(-1),
+            w_z_LCDM_extended: Array(201).fill(-1),
+            DESI_point: { z: 0.5, w: -1.05, label: "DESI Fit (w₀ + wₐ/3)" }
+        };
+        let data = JSON.parse(JSON.stringify(default_data)); // Deep copy
+
+        // Initial Model Parameters (matching the sliders)
+        let modelParams = {
+            alpha_0: -0.65,
+            alpha_amp: 1.10,
+            z_star: 0.60,
+            beta: 0.040
+        };
+
+        // Preset parameter sets for different DESI fits
+        const parameterPresets = {
+            pantheon: { // DESI+SDSS+CMB+PantheonPlus: w₀ = -0.855, wₐ = -0.60
+                alpha_0: -0.63,
+                alpha_amp: 1.15,
+                z_star: 0.58,
+                beta: 0.042,
+                w05_target: -1.06
+            },
+            union: { // DESI+SDSS+CMB+Union3: w₀ = -0.692, wₐ = -1.06
+                alpha_0: -0.65,
+                alpha_amp: 1.10,
+                z_star: 0.60,
+                beta: 0.040,
+                w05_target: -1.05
+            },
+            desy5: { // DESI+SDSS+CMB+DESY5: w₀ = -0.761, wₐ = -0.88
+                alpha_0: -0.64,
+                alpha_amp: 1.12,
+                z_star: 0.59,
+                beta: 0.041,
+                w05_target: -1.05
+            }
+        };
+
+        // Interpolation Data for S_rel
+        const zData_Srel = [0.0, 0.5, 1.0, 2.0, 3.0];
+        const sRelData = [1.0, 0.339, 0.156, 0.053, 0.02];
+
+        // Interpolation Function (linear for simplicity)
+        function interpolateSrel(z) {
+            if (z < 0) return 1.0;
+            if (z > 3) return 0.02; // Use last value for extrapolation
+            let i = 0;
+            while (i < zData_Srel.length - 1 && zData_Srel[i + 1] < z) i++;
+
+            // Handle edge cases and exact matches
+             if (z === zData_Srel[i]) return sRelData[i];
+             if (i === zData_Srel.length - 1) return sRelData[i]; // Return last value if z is beyond last data point
+
+            // Linear interpolation
+            const z0 = zData_Srel[i];
+            const z1 = zData_Srel[i + 1];
+            const s0 = sRelData[i];
+            const s1 = sRelData[i + 1];
+            const t = (z - z0) / (z1 - z0);
+            const interpVal = s0 + t * (s1 - s0);
+            return Math.max(interpVal, 0); // Ensure non-negative
+        }
+
+        // Function to compute w(z) based on current modelParams
+        function computeWz(zArray) {
+            const zStep = zArray[1] - zArray[0]; // Assume uniform spacing
+
+            // Calculate alpha(z) based on current slider values
+            const alpha_z = zArray.map(z_val => modelParams.alpha_0 + modelParams.alpha_amp * Math.tanh(2 * (z_val - modelParams.z_star)));
+
+            // Calculate S_rel using interpolation
+            const S_rel = zArray.map(z_val => interpolateSrel(z_val));
+
+            // Calculate Temperature Term and Entropy Term
+            const tempTerm = zArray.map((z_val, i) => Math.pow(1/(1+z_val), alpha_z[i]));
+            const entropyTerm = zArray.map((z_val, i) => 1 + modelParams.beta * S_rel[i]);
+
+            // Calculate Lambda_ratio
+            const lambdaRatio = zArray.map((z_val, i) => tempTerm[i] * entropyTerm[i]);
+
+            // Calculate dlnLambda/dz numerically
+            const dlnLambdaDz = zArray.map((z_val, i, arr) => {
+                if (i === 0) {
+                    return Math.log(lambdaRatio[i+1] / lambdaRatio[i]) / zStep;
+                } else if (i === arr.length - 1) {
+                    return Math.log(lambdaRatio[i] / lambdaRatio[i-1]) / zStep;
+                } else {
+                    return Math.log(lambdaRatio[i+1] / lambdaRatio[i-1]) / (2 * zStep);
+                }
+            });
+
+            // Calculate w(z)
+            return zArray.map((z_val, i) => -1 + (1+z_val)/3 * dlnLambdaDz[i]);
+        }
+
+        let wzChartInstance, extendedWzChartInstance;
+
+        // Function to render the main w(z) chart
+        function renderCharts() {
+            // Setup common chart parameters
+            const isDarkMode = document.documentElement.classList.contains('dark');
+            const gridColor = isDarkMode ? 'rgba(209, 213, 219, 0.15)' : 'rgba(55, 65, 81, 0.15)';
+            const textColor = isDarkMode ? '#f3f4f6' : '#1f2937';
+            
+            // Compute w(z) for focused range
+            const w_z_focused = computeWz(data.z_focused);
+            
+            // Find value at z=0.5
+            const z05Index = data.z_focused.findIndex(z_val => Math.abs(z_val - 0.5) < 0.01);
+            const wz05 = z05Index !== -1 ? w_z_focused[z05Index] : NaN;
+
+            // Update the display for current w(0.5) value
+            const w05Element = document.getElementById('w05_current_value');
+            if (w05Element) {
+                w05Element.textContent = `Aktueller Wert: w(0.5) = ${wz05.toFixed(3)}`;
+                
+                // Add color coding based on how close it is to the target
+                const targetValue = -1.05;
+                const diff = Math.abs(wz05 - targetValue);
+                
+                if (diff < 0.01) {
+                    w05Element.className = 'text-center font-semibold mt-4 text-lg text-green-500 dark:text-green-400';
+                } else if (diff < 0.05) {
+                    w05Element.className = 'text-center font-semibold mt-4 text-lg text-yellow-500 dark:text-yellow-400';
+                } else {
+                    w05Element.className = 'text-center font-semibold mt-4 text-lg text-red-500 dark:text-red-400';
+                }
+            }
+
+            // FOCUSED CHART: Render main chart with focused z range
+            const focusedCtx = document.getElementById('WzChart')?.getContext('2d');
+            if (focusedCtx) {
+                if (wzChartInstance) {
+                    wzChartInstance.destroy();
+                }
+
+                wzChartInstance = new Chart(focusedCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.z_focused,
+                        datasets: [
+                            {
+                                label: 'w(z) GDE-Modell',
+                                data: w_z_focused,
+                                borderColor: '#5D5CDE', // Primary color
+                                backgroundColor: 'rgba(93, 92, 222, 0.1)',
+                                borderWidth: 3,
+                                fill: 'origin',
+                                tension: 0.1,
+                                pointRadius: 0,
+                            },
+                            {
+                                label: 'w(z) ΛCDM',
+                                data: Array(data.z_focused.length).fill(-1),
+                                borderColor: '#10b981', // Cosmological green
+                                borderWidth: 2,
+                                borderDash: [6, 3],
+                                fill: false,
+                                pointRadius: 0,
+                            },
+                            {
+                                label: data.DESI_point.label,
+                                data: [{ x: data.DESI_point.z, y: data.DESI_point.w }],
+                                borderColor: '#f97316', // DESI orange
+                                backgroundColor: '#f97316',
+                                pointRadius: 7,
+                                pointHoverRadius: 9,
+                                showLine: false,
+                                type: 'scatter' // Ensure this is treated as a point
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { color: textColor, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
+                            tooltip: {
+                                 mode: 'index',
+                                 intersect: false,
+                                 callbacks: { 
+                                    label: function(context) {
+                                        if (context.dataset.type === 'scatter') {
+                                            return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} bei z=${context.parsed.x}`;
+                                        }
+                                         let label = context.dataset.label || '';
+                                         if (label) { label += ': '; }
+                                         label += context.parsed.y.toFixed(3);
+                                         return label;
+                                     }
+                                 }
+                             },
+                            annotation: {
+                                annotations: {
+                                    phantomRegion: {
+                                        type: 'box',
+                                        xMin: data.z_focused[0], // Start of chart x-axis
+                                        xMax: data.z_focused[data.z_focused.length - 1], // End of chart x-axis
+                                        yMin: -1.25, // Bottom of chart y-axis (adjust if needed)
+                                        yMax: -1,    // Phantom boundary
+                                        backgroundColor: 'rgba(239, 68, 68, 0.1)', // Phantom color with low opacity
+                                        borderColor: 'rgba(239, 68, 68, 0)',
+                                        borderWidth: 0,
+                                        drawTime: 'beforeDatasetsDraw' // Draw behind dataset lines
+                                    },
+                                    phantomLabel: {
+                                        type: 'label',
+                                        xValue: 0.95, // Position label towards the right
+                                        yValue: -1.03, // Position just inside the box
+                                        content: 'Phantom-Bereich (w < -1)',
+                                        color: isDarkMode ? '#fca5a5' : '#b91c1c', // Phantom text color
+                                        font: { size: 10, style: 'italic' }
+                                    },
+                                    quintessenceRegion: {
+                                        type: 'box',
+                                        xMin: data.z_focused[0],
+                                        xMax: data.z_focused[data.z_focused.length - 1],
+                                        yMin: -1,
+                                        yMax: -0.7,
+                                        backgroundColor: 'rgba(59, 130, 246, 0.1)', // Quintessence color
+                                        borderColor: 'rgba(59, 130, 246, 0)',
+                                        borderWidth: 0,
+                                        drawTime: 'beforeDatasetsDraw'
+                                    },
+                                    quintessenceLabel: {
+                                        type: 'label',
+                                        xValue: 0.95,
+                                        yValue: -0.85,
+                                        content: 'Quintessenz-Bereich (w > -1)',
+                                        color: isDarkMode ? '#93c5fd' : '#2563eb',
+                                        font: { size: 10, style: 'italic' }
+                                    },
+                                    valueAtZ05: { // Annotation for current w(0.5)
+                                        type: 'label',
+                                        xValue: 0.5,
+                                        yValue: wz05 + 0.02, // Position slightly above the point
+                                        content: [`w(0.5) = ${wz05.toFixed(3)}`],
+                                        backgroundColor: 'rgba(93, 92, 222, 0.8)',
+                                        font: { size: 11, weight: 'bold', color: 'white' },
+                                        padding: { x: 5, y: 3 },
+                                        borderRadius: 4
+                                    },
+                                    z05Line: {
+                                        type: 'line',
+                                        xMin: 0.5,
+                                        xMax: 0.5,
+                                        yMin: -1.25,
+                                        yMax: -0.7,
+                                        borderColor: 'rgba(249, 115, 22, 0.4)',
+                                        borderWidth: 1,
+                                        borderDash: [5, 5]
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Rotverschiebung z', font: { weight: 'bold' }, color: textColor },
+                                min: 0.3, // Focus on the specified range
+                                max: 1.0,
+                                ticks: { color: textColor }
+                            },
+                            y: {
+                                title: { display: true, text: 'w(z)', font: { weight: 'bold' }, color: textColor },
+                                min: -1.25, // Adjust range to focus on phantom crossing
+                                max: -0.7,
+                                ticks: { color: textColor },
+                                 grid: { 
+                                    color: (context) => {
+                                        if (context.tick.value === -1) {
+                                            return isDarkMode ? 'rgba(16, 185, 129, 0.5)' : 'rgba(16, 185, 129, 0.3)';
+                                        }
+                                        return gridColor;
+                                    },
+                                    lineWidth: (context) => context.tick.value === -1 ? 2 : 1
+                                 }
+                            }
+                        },
+                        elements: {
+                            line: { tension: 0.1 } // Smoother lines
+                        }
+                    }
+                });
+            }
+            
+            // EXTENDED CHART: Render the extended z range chart
+            const extendedCtx = document.getElementById('ExtendedWzChart')?.getContext('2d');
+            if (extendedCtx) {
+                if (extendedWzChartInstance) {
+                    extendedWzChartInstance.destroy();
+                }
+                
+                // Compute w(z) for extended range
+                const w_z_extended = computeWz(data.z_extended);
+                
+                extendedWzChartInstance = new Chart(extendedCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.z_extended,
+                        datasets: [
+                            {
+                                label: 'w(z) GDE-Modell',
+                                data: w_z_extended,
+                                borderColor: '#5D5CDE', // Primary color
+                                backgroundColor: 'transparent',
+                                borderWidth: 3,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 0,
+                            },
+                            {
+                                label: 'w(z) ΛCDM',
+                                data: Array(data.z_extended.length).fill(-1),
+                                borderColor: '#10b981', // Cosmological green
+                                borderWidth: 2,
+                                borderDash: [6, 3],
+                                fill: false,
+                                pointRadius: 0,
+                            },
+                            {
+                                label: data.DESI_point.label,
+                                data: [{ x: data.DESI_point.z, y: data.DESI_point.w }],
+                                borderColor: '#f97316', // DESI orange
+                                backgroundColor: '#f97316',
+                                pointRadius: 6,
+                                pointHoverRadius: 8,
+                                showLine: false,
+                                type: 'scatter' // Ensure this is treated as a point
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { color: textColor, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
+                            tooltip: {
+                                 mode: 'index',
+                                 intersect: false
+                             },
+                            annotation: {
+                                annotations: {
+                                    phantomRegion: {
+                                        type: 'box',
+                                        xMin: -0.5,
+                                        xMax: 3.5,
+                                        yMin: -1.5,
+                                        yMax: -1,
+                                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                        borderColor: 'rgba(239, 68, 68, 0)',
+                                        borderWidth: 0,
+                                        drawTime: 'beforeDatasetsDraw'
+                                    },
+                                    quintessenceRegion: {
+                                        type: 'box',
+                                        xMin: -0.5,
+                                        xMax: 3.5,
+                                        yMin: -1,
+                                        yMax: -0.5,
+                                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                        borderColor: 'rgba(59, 130, 246, 0)',
+                                        borderWidth: 0,
+                                        drawTime: 'beforeDatasetsDraw'
+                                    },
+                                    focusRegion: {
+                                        type: 'box',
+                                        xMin: 0.3,
+                                        xMax: 1.0,
+                                        yMin: -1.5,
+                                        yMax: -0.5,
+                                        backgroundColor: 'rgba(93, 92, 222, 0.05)',
+                                        borderColor: '#5D5CDE',
+                                        borderWidth: 1,
+                                        borderDash: [5, 5],
+                                        drawTime: 'beforeDatasetsDraw'
+                                    },
+                                    focusLabel: {
+                                        type: 'label',
+                                        xValue: 0.65,
+                                        yValue: -0.6,
+                                        content: 'Fokusbereich',
+                                        color: '#5D5CDE',
+                                        font: { size: 10, style: 'italic' }
+                                    },
+                                    z05Line: {
+                                        type: 'line',
+                                        xMin: 0.5,
+                                        xMax: 0.5,
+                                        yMin: -1.5,
+                                        yMax: -0.5,
+                                        borderColor: 'rgba(249, 115, 22, 0.4)',
+                                        borderWidth: 1,
+                                        borderDash: [5, 5]
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Rotverschiebung z', font: { weight: 'bold' }, color: textColor },
+                                min: -0.5, // Show extended range
+                                max: 3.5,
+                                ticks: { color: textColor }
+                            },
+                            y: {
+                                title: { display: true, text: 'w(z)', font: { weight: 'bold' }, color: textColor },
+                                min: -1.5,
+                                max: -0.5,
+                                ticks: { color: textColor },
+                                 grid: { 
+                                    color: (context) => {
+                                        if (context.tick.value === -1) {
+                                            return isDarkMode ? 'rgba(16, 185, 129, 0.5)' : 'rgba(16, 185, 129, 0.3)';
+                                        }
+                                        return gridColor;
+                                    },
+                                    lineWidth: (context) => context.tick.value === -1 ? 2 : 1
+                                 }
+                            }
+                        },
+                        elements: {
+                            line: { tension: 0.1 }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Function to update parameters and UI based on preset
+        function applyPreset(presetKey) {
+            const preset = parameterPresets[presetKey];
+            if (!preset) return;
+            
+            // Update model parameters
+            modelParams = { ...preset };
+            
+            // Update UI sliders
+            document.getElementById('alpha_0').value = preset.alpha_0;
+            document.getElementById('alpha_0_value').textContent = `α₀ = ${preset.alpha_0.toFixed(2)}`;
+            
+            document.getElementById('alpha_amp').value = preset.alpha_amp;
+            document.getElementById('alpha_amp_value').textContent = `A = ${preset.alpha_amp.toFixed(2)}`;
+            
+            document.getElementById('z_star').value = preset.z_star;
+            document.getElementById('z_star_value').textContent = `z* = ${preset.z_star.toFixed(2)}`;
+            
+            document.getElementById('beta').value = preset.beta;
+            document.getElementById('beta_value').textContent = `β = ${preset.beta.toFixed(3)}`;
+            
+            // Update target value display
+            document.getElementById('w05_target').textContent = `Zielwert: w(0.5) ≈ ${preset.w05_target.toFixed(2)}`;
+            
+            // Update DESI point
+            data.DESI_point.w = preset.w05_target;
+            
+            // Re-render chart
+            renderCharts();
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize dark mode toggle
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const darkModeIcon = document.getElementById('darkModeIcon');
+            const darkModeText = document.getElementById('darkModeText');
+            
+            function updateDarkModeUI() {
+                if (document.documentElement.classList.contains('dark')) {
+                    darkModeIcon.textContent = '☀️';
+                    darkModeText.textContent = 'Light Mode';
+                } else {
+                    darkModeIcon.textContent = '🌙';
+                    darkModeText.textContent = 'Dark Mode';
+                }
+            }
+            
+            if (darkModeToggle) {
+                darkModeToggle.addEventListener('click', () => {
+                    document.documentElement.classList.toggle('dark');
+                    updateDarkModeUI();
+                    renderCharts();
+                });
+                updateDarkModeUI();
+            }
+            
+            // Initialize sliders
+            const sliders = [
+                { id: 'alpha_0', valueId: 'alpha_0_value', key: 'alpha_0', format: v => `α₀ = ${v.toFixed(2)}` },
+                { id: 'alpha_amp', valueId: 'alpha_amp_value', key: 'alpha_amp', format: v => `A = ${v.toFixed(2)}` },
+                { id: 'z_star', valueId: 'z_star_value', key: 'z_star', format: v => `z* = ${v.toFixed(2)}` },
+                { id: 'beta', valueId: 'beta_value', key: 'beta', format: v => `β = ${v.toFixed(3)}` }
+            ];
+
+            function updateSliderValue(slider) {
+                const element = document.getElementById(slider.id);
+                const valueElement = document.getElementById(slider.valueId);
+                if (!element || !valueElement) return;
+                
+                const value = parseFloat(element.value);
+                modelParams[slider.key] = value;
+                valueElement.textContent = slider.format(value);
+            }
+
+            sliders.forEach(slider => {
+                const element = document.getElementById(slider.id);
+                if(element) {
+                    element.addEventListener('input', () => {
+                        updateSliderValue(slider);
+                        renderCharts(); // Re-render the chart on slider change
+                    });
+                    // Initial display
+                    updateSliderValue(slider);
+                }
+            });
+
+            // Reset Button Listener
+            const resetButton = document.getElementById('resetParams');
+            if (resetButton) {
+               resetButton.addEventListener('click', () => {
+                   // Apply the union preset (which matches our default values)
+                   applyPreset('union');
+               });
+            }
+            
+            // Preset buttons
+            document.getElementById('pantheonFit')?.addEventListener('click', () => applyPreset('pantheon'));
+            document.getElementById('unionFit')?.addEventListener('click', () => applyPreset('union'));
+            document.getElementById('desy5Fit')?.addEventListener('click', () => applyPreset('desy5'));
+
+            // Initial Chart Render
+            renderCharts();
+        });
+    </script>
+</body>
+</html>
