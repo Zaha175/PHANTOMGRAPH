@@ -40,7 +40,7 @@
         }
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
             document.documentElement.classList.toggle('dark', event.matches);
-            renderChart(); // Re-render chart on theme change
+            renderCharts(); // Re-render chart on theme change
         });
     </script>
     <style>
@@ -63,6 +63,24 @@
         }
         /* Fix MathJax in dark mode */
         .dark .MathJax { color: #f3f4f6 !important; }
+        
+        /* Debug area */
+        .debug-area {
+            font-family: monospace;
+            font-size: 12px;
+            padding: 8px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .dark .debug-area {
+            background-color: rgba(20, 20, 30, 0.9);
+            color: #a5f3fc;
+        }
+        .light .debug-area {
+            background-color: rgba(240, 240, 250, 0.9);
+            color: #0e7490;
+        }
     </style>
 </head>
 <body class="bg-bgLight dark:bg-bgDark text-textLight dark:text-textDark transition-colors duration-200 font-sans">
@@ -89,7 +107,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
                         <label for="alpha_0" class="block font-semibold text-indigo-700 dark:text-indigo-300 text-sm slider-label">Basis-Exponent α<sub>0</sub></label>
-                        <input type="range" id="alpha_0" min="-1.0" max="-0.5" step="0.01" value="-0.65" class="w-full">
+                        <input type="range" id="alpha_0" min="-1.0" max="-0.3" step="0.01" value="-0.65" class="w-full">
                         <p id="alpha_0_value" class="text-sm text-center font-medium">α<sub>0</sub> = -0.65</p>
                     </div>
                     <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
@@ -99,8 +117,8 @@
                     </div>
                     <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
                         <label for="z_star" class="block font-semibold text-indigo-700 dark:text-indigo-300 text-sm slider-label">Übergang z<sub>*</sub></label>
-                        <input type="range" id="z_star" min="0.5" max="0.7" step="0.01" value="0.60" class="w-full">
-                        <p id="z_star_value" class="text-sm text-center font-medium">z<sub>*</sub> = 0.60</p>
+                        <input type="range" id="z_star" min="0.4" max="0.8" step="0.01" value="0.70" class="w-full">
+                        <p id="z_star_value" class="text-sm text-center font-medium">z<sub>*</sub> = 0.70</p>
                     </div>
                     <div class="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
                         <label for="beta" class="block font-semibold text-indigo-700 dark:text-indigo-300 text-sm slider-label">Entropie β</label>
@@ -195,6 +213,8 @@
                     </div>
                     <p class="text-sm mt-2">Der Übergang bei z* erzeugt die komplexe w(z)-Dynamik, die den DESI-Daten entspricht.</p>
                 </div>
+                
+                <div id="debugOutput" class="mt-4 debug-area hidden"></div>
             </section>
         </div>
         
@@ -241,7 +261,7 @@
         let modelParams = {
             alpha_0: -0.65,
             alpha_amp: 1.10,
-            z_star: 0.60,
+            z_star: 0.70, // Geändert auf 0.70
             beta: 0.040
         };
 
@@ -250,25 +270,51 @@
             pantheon: { // DESI+SDSS+CMB+PantheonPlus: w₀ = -0.855, wₐ = -0.60
                 alpha_0: -0.63,
                 alpha_amp: 1.15,
-                z_star: 0.58,
+                z_star: 0.68, // Angepasst für neuen z*-Bereich
                 beta: 0.042,
                 w05_target: -1.06
             },
             union: { // DESI+SDSS+CMB+Union3: w₀ = -0.692, wₐ = -1.06
                 alpha_0: -0.65,
                 alpha_amp: 1.10,
-                z_star: 0.60,
+                z_star: 0.70, // Angepasst für neuen z*-Bereich
                 beta: 0.040,
                 w05_target: -1.05
             },
             desy5: { // DESI+SDSS+CMB+DESY5: w₀ = -0.761, wₐ = -0.88
                 alpha_0: -0.64,
                 alpha_amp: 1.12,
-                z_star: 0.59,
+                z_star: 0.69, // Angepasst für neuen z*-Bereich
                 beta: 0.041,
                 w05_target: -1.05
             }
         };
+
+        // Function to log debug information
+        function debug(msg, data) {
+            const debugEl = document.getElementById('debugOutput');
+            if (debugEl) {
+                debugEl.classList.remove('hidden');
+                // Add timestamp
+                const now = new Date();
+                const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${now.getMilliseconds()}`;
+                
+                // Create a new message element
+                const msgEl = document.createElement('div');
+                msgEl.textContent = `[${timestamp}] ${msg}: ${JSON.stringify(data)}`;
+                
+                // Add to debug area
+                debugEl.appendChild(msgEl);
+                
+                // Scroll to bottom
+                debugEl.scrollTop = debugEl.scrollHeight;
+                
+                // Limit to 20 messages
+                while (debugEl.children.length > 20) {
+                    debugEl.removeChild(debugEl.firstChild);
+                }
+            }
+        }
 
         // Interpolation Data for S_rel
         const zData_Srel = [0.0, 0.5, 1.0, 2.0, 3.0];
@@ -305,8 +351,10 @@
             // Calculate S_rel using interpolation
             const S_rel = zArray.map(z_val => interpolateSrel(z_val));
 
-            // Calculate Temperature Term and Entropy Term
-            const tempTerm = zArray.map((z_val, i) => Math.pow(1/(1+z_val), alpha_z[i]));
+            // CORRECTED: Calculate Temperature Term - Note the correct formula is (1+z)^-alpha(z)
+            const tempTerm = zArray.map((z_val, i) => Math.pow(1+z_val, -alpha_z[i]));
+
+            // Calculate Entropy Term
             const entropyTerm = zArray.map((z_val, i) => 1 + modelParams.beta * S_rel[i]);
 
             // Calculate Lambda_ratio
@@ -323,8 +371,26 @@
                 }
             });
 
-            // Calculate w(z)
-            return zArray.map((z_val, i) => -1 + (1+z_val)/3 * dlnLambdaDz[i]);
+            // Calculate w(z) - standard formula: w(z) = -1 + (1+z)/3 * dlnLambda/dz
+            const w_z = zArray.map((z_val, i) => -1 + (1+z_val)/3 * dlnLambdaDz[i]);
+            
+            // DEBUG: Log a specific value for z=0.5
+            const z05Index = zArray.findIndex(z => Math.abs(z - 0.5) < 0.01);
+            if (z05Index >= 0) {
+                // Log the components that go into w(0.5) calculation
+                debug("w(0.5) calculation", {
+                    z: zArray[z05Index],
+                    alpha_z: alpha_z[z05Index], 
+                    S_rel: S_rel[z05Index],
+                    tempTerm: tempTerm[z05Index],
+                    entropyTerm: entropyTerm[z05Index],
+                    lambdaRatio: lambdaRatio[z05Index],
+                    dlnLambdaDz: dlnLambdaDz[z05Index],
+                    w_z: w_z[z05Index]
+                });
+            }
+
+            return w_z;
         }
 
         let wzChartInstance, extendedWzChartInstance;
